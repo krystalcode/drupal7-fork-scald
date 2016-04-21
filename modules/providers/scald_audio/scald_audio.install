@@ -13,6 +13,13 @@ function scald_audio_install() {
 }
 
 /**
+ * Implements hook_enable().
+ */
+function scald_audio_enable() {
+  _scald_audio_create_file_field();
+}
+
+/**
  * Implements hook_uninstall().
  */
 function scald_audio_uninstall() {
@@ -21,4 +28,86 @@ function scald_audio_uninstall() {
   module_load_include('inc', 'scald', 'includes/ScaldAtomController');
 
   ScaldAtomController::removeType('audio');
+}
+
+/**
+ * Create a file field.
+ */
+function _scald_audio_create_file_field() {
+  // Create file field.
+  if (!field_info_field('scald_audio')) {
+    $field = array(
+      'field_name' => 'scald_audio',
+      'type' => 'file',
+    );
+
+    field_create_field($field);
+
+    $instance = array(
+      'field_name' => 'scald_audio',
+      'label' => t('Audio'),
+      'entity_type' => 'scald_atom',
+      'bundle' => 'audio',
+      'required' => TRUE,
+      'settings' => array(
+        'file_extensions' => 'wav ogg mp3',
+        'file_directory' => 'atoms/audio',
+      ),
+      'widget' => array(
+        'weight' => -4,
+      ),
+    );
+
+    if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Add the file field and update Files to the new scald_audio field.
+ */
+function scald_audio_update_7001(&$sandbox) {
+  if (!isset($sandbox['progress'])) {
+    $sandbox['progress'] = 0;
+    $sandbox['current_sid'] = 0;
+    $sandbox['max'] = db_query("SELECT COUNT(s.sid) FROM {scald_atoms} s WHERE s.provider='scald_audio' AND s.type='audio' AND s.base_id IS NOT NULL")->fetchField();
+    $sandbox['affected_rows'] = 0;
+  }
+
+  // First make sure we have the file field.
+  _scald_audio_create_file_field();
+
+  $stop_at = time() + 5;
+  // Get all the audio atom sids.
+  $sids = db_query("SELECT s.sid FROM {scald_atoms} s WHERE s.provider='scald_audio' AND s.type='audio' AND s.base_id IS NOT NULL AND s.sid > :sid ORDER BY s.sid", array(':sid' => $sandbox['current_sid']));
+  // Loop them through.
+  while ($sid = $sids->fetchColumn()) {
+    $atom = scald_atom_load($sid);
+    // Make sure we have a base entity.
+    if (isset($atom->base_id)) {
+      $file = file_load($atom->base_id);
+      // Make sure we have something in uri.
+      if (!empty($file->uri)) {
+        // Add the display field.
+        $file->display = TRUE;
+        // Use it for the scald_audio field.
+        $atom->scald_audio[LANGUAGE_NONE][0] = (array) $file;
+        scald_atom_save($atom);
+        $sandbox['affected_rows']++;
+      }
+    }
+    $sandbox['progress']++;
+    $sandbox['current_sid'] = $sid;
+
+    if (time() > $stop_at) {
+      break;
+    }
+  }
+
+  $sandbox['#finished'] = empty($sandbox['max']) ? 1 : $sandbox['progress'] / $sandbox['max'];
+
+  if ($sandbox['#finished'] >= 1) {
+    return t('Updated %affected_rows atoms.', array('%affected_rows' => $sandbox['affected_rows']));
+  }
 }

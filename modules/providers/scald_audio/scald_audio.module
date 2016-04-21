@@ -24,11 +24,25 @@ function scald_audio_scald_atom_providers() {
 function scald_audio_scald_add_form(&$form, &$form_state) {
   $defaults = scald_atom_defaults('audio');
   $type = scald_type_load('audio');
+
+  $field = field_info_field('scald_audio');
+  $instance = field_info_instance('scald_atom', 'scald_audio', 'audio');
+  $validators = array(
+    'file_validate_extensions' => array(0 => 'wav ogg mp3'),
+  );
+  $location = 'public://atoms/audio/';
+  if ($field && $instance) {
+    $validators = file_field_widget_upload_validators($field, $instance);
+    $directory = file_field_widget_uri($field, $instance);
+    if (file_prepare_directory($directory, FILE_CREATE_DIRECTORY)) {
+      $location = $directory . '/';
+    }
+  }
   $form['file'] = array(
     '#type' => $defaults->upload_type,
     '#title' => check_plain(scald_type_property_translate($type)),
-    '#upload_location' => 'public://atoms/audio/',
-    '#upload_validators' => array('file_validate_extensions' => array('wav ogg mp3')),
+    '#upload_location' => $location,
+    '#upload_validators' => $validators,
   );
 }
 
@@ -56,10 +70,8 @@ function scald_audio_scald_add_form_fill(&$atoms, $form, $form_state) {
       $file = file_load($form_state['values']['file']);
     }
     $atom->base_id = $file->fid;
-    $atom->file_source = $file->uri;
-    $atom->data['audio_file'] = $file->uri;
-    $atom->data['audio_id'] = $file->fid;
     $atom->title = $file->filename;
+    $atom->scald_audio[LANGUAGE_NONE][0] = (array) $file;
 
     if (file_prepare_directory($dir_audio_thumb, FILE_CREATE_DIRECTORY)) {
       if (module_exists('waudio_getid3') && $getid3 = _waudio_getid3_load()) {
@@ -148,20 +160,39 @@ function scald_audio_scald_fetch($atom, $type) {
   }
   $file = file_load($atom->base_id);
   $atom->base_entity = $file;
-  $atom->file_source = $atom->data['audio_file'];
+  $atom->file_source = $file->uri;
 }
 
 /**
- * Implements hook_scald_atom_insert().
+ * Synchronisation of scald_audio field with base_id.
+ *
+ * The scald_audio field is also the base entity. We keep them in synchronisation
+ * when user updates that field.
+ *
+ * @param object $atom
+ *   Atom.
  */
-function scald_audio_scald_atom_insert($atom) {
-  if ($atom->provider == 'scald_audio') {
-    $file = file_load($atom->data['audio_id']);
-    if ($file) {
-      $file->status = FILE_STATUS_PERMANENT;
-      file_save($file);
-      file_usage_add($file, 'scald_audio', 'scald_atom', $atom->sid);
-    }
+function _scald_audio_sync_file($atom) {
+  if ($atom->scald_audio) {
+    $atom->base_id = $atom->scald_audio[LANGUAGE_NONE][0]['fid'];
+  }
+}
+
+/**
+ * Implements hook_scald_update_atom().
+ */
+function scald_audio_scald_update_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _scald_audio_sync_file($atom);
+  }
+}
+
+/**
+ * Implements hook_scald_register_atom().
+ */
+function scald_audio_scald_register_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _scald_audio_sync_file($atom);
   }
 }
 
