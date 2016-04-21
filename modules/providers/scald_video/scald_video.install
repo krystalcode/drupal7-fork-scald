@@ -9,7 +9,13 @@
  */
 function scald_video_install() {
   ScaldAtomController::addType('video', 'Video', 'Scald provider to host your videos in your drupal site.');
-  variable_set('scald_video_upload_location', 'public://atoms/video/');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function scald_video_enable() {
+  _scald_video_create_file_field();
 }
 
 /**
@@ -18,5 +24,97 @@ function scald_video_install() {
 function scald_video_uninstall() {
   drupal_load('module', 'scald');
   ScaldAtomController::removeType('video');
+}
+
+/**
+ * Create a file field.
+ */
+function _scald_video_create_file_field() {
+  // Create file field.
+  if (!field_info_field('scald_video')) {
+    $field = array(
+      'field_name' => 'scald_video',
+      'type' => 'file',
+    );
+
+    field_create_field($field);
+
+    $instance = array(
+      'field_name' => 'scald_video',
+      'label' => t('Video'),
+      'entity_type' => 'scald_atom',
+      'bundle' => 'video',
+      'required' => TRUE,
+      'settings' => array(
+        'file_extensions' => 'webm mp4 ogv',
+        'file_directory' => 'atoms/video',
+      ),
+      'widget' => array(
+        'weight' => -4,
+      ),
+    );
+
+    if (!field_read_instance($instance['entity_type'], $instance['field_name'], $instance['bundle'])) {
+      field_create_instance($instance);
+    }
+  }
+}
+
+/**
+ * Add the file field and update Files to the new scald_video field.
+ * Delete video atoms upload location variable.
+ */
+function scald_video_update_7001(&$sandbox) {
+  if (!isset($sandbox['progress'])) {
+    $sandbox['progress'] = 0;
+    $sandbox['current_sid'] = 0;
+    $sandbox['max'] = db_query("SELECT COUNT(s.sid) FROM {scald_atoms} s WHERE s.provider='scald_video' AND s.type='video' AND s.base_id IS NOT NULL")->fetchField();
+    $sandbox['affected_rows'] = 0;
+  }
+
+  // First make sure we have the file field.
+  _scald_video_create_file_field();
+
+  $stop_at = time() + 5;
+  // Get all the video atom sids.
+  $sids = db_query("SELECT s.sid FROM {scald_atoms} s WHERE s.provider='scald_video' AND s.type='video' AND s.base_id IS NOT NULL AND s.sid > :sid ORDER BY s.sid", array(':sid' => $sandbox['current_sid']));
+  // Loop them through.
+  while ($sid = $sids->fetchColumn()) {
+    $atom = scald_atom_load($sid);
+    // Make sure we have a base entity.
+    /**
+     * @Issue(
+     *   "Add alternative sources as well"
+     *   type="bug"
+     *   priority="normal"
+     * )
+     */
+    if (isset($atom->base_id)) {
+      $file = file_load($atom->base_id);
+      // Make sure we have something in uri.
+      if (!empty($file->uri)) {
+        // Add the display field.
+        $file->display = TRUE;
+        // Use it for the scald_audio field.
+        $atom->scald_video[LANGUAGE_NONE][0] = (array) $file;
+        scald_atom_save($atom);
+        $sandbox['affected_rows']++;
+      }
+    }
+    $sandbox['progress']++;
+    $sandbox['current_sid'] = $sid;
+
+    if (time() > $stop_at) {
+      break;
+    }
+  }
+
+  $sandbox['#finished'] = empty($sandbox['max']) ? 1 : $sandbox['progress'] / $sandbox['max'];
+
+  if ($sandbox['#finished'] >= 1) {
+    return t('Updated %affected_rows atoms.', array('%affected_rows' => $sandbox['affected_rows']));
+  }
+
+  // Delete variables that is not needed anymore.
   variable_del('scald_video_upload_location');
 }

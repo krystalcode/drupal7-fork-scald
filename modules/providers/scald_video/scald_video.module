@@ -3,6 +3,12 @@
 /**
  * @file
  * Scald Video is a Scald Atom Provider for video files.
+ *
+ * @Issue(
+ *   "Test plupload integration"
+ *   type="bug"
+ *   priority="normal"
+ * )
  */
 
 /*******************************************************************************
@@ -40,7 +46,7 @@ function scald_video_scald_add_atom_count(&$form, &$form_state) {
  * Implements hook_scald_add_form_fill().
  */
 function scald_video_scald_add_form_fill(&$atoms, $form, $form_state) {
-  $dir_video_thumb = 'public://atoms/video/thumb';
+  $dir_video_thumb = ScaldAtomController::getThumbnailPath('video');
 
   foreach ($atoms as $delta => $atom) {
 
@@ -56,10 +62,8 @@ function scald_video_scald_add_form_fill(&$atoms, $form, $form_state) {
     $file = scald_video_get_video_file($file_infos, $form['file']['#upload_location']);
 
     $atom->base_id = $file->fid;
-    $atom->file_source = $file->uri;
-    $atom->data['video_file'] = $file->uri;
-    $atom->data['video_id'] = $file->fid;
     $atom->title = $file->filename;
+    $atom->scald_video[LANGUAGE_NONE][0] = (array) $file;
 
     // @TODO : find lib to get metadatas from video files
   }
@@ -76,20 +80,41 @@ function scald_video_scald_fetch($atom, $type) {
       $atom->thumbnail_source = $file_item['uri'];
     }
   }
-  $atom->file_source = $atom->data['video_file'];
+  $file = file_load($atom->base_id);
+  $atom->base_entity = $file;
+  $atom->file_source = $file->uri;
 }
 
 /**
- * Implements hook_scald_atom_insert().
+ * Synchronisation of scald_video field with base_id.
+ *
+ * The scald_video field is also the base entity. We keep them in
+ * synchronisation when user updates that field.
+ *
+ * @param object $atom
+ *   Atom.
  */
-function scald_video_scald_atom_insert($atom) {
-  if ($atom->provider == 'scald_video') {
-    $file = file_load($atom->data['video_id']);
-    if ($file) {
-      $file->status = FILE_STATUS_PERMANENT;
-      file_save($file);
-      file_usage_add($file, 'scald_video', 'scald_atom', $atom->sid);
-    }
+function _scald_video_sync_file($atom) {
+  if ($atom->scald_video) {
+    $atom->base_id = $atom->scald_video[LANGUAGE_NONE][0]['fid'];
+  }
+}
+
+/**
+ * Implements hook_scald_update_atom().
+ */
+function scald_video_scald_update_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _scald_video_sync_file($atom);
+  }
+}
+
+/**
+ * Implements hook_scald_register_atom().
+ */
+function scald_video_scald_register_atom($atom, $mode) {
+  if ($mode == 'atom') {
+    _scald_video_sync_file($atom);
   }
 }
 
@@ -97,28 +122,12 @@ function scald_video_scald_atom_insert($atom) {
  * Implements hook_scald_prerender().
  */
 function scald_video_scald_prerender($atom, $context, $options, $mode) {
-
-  $video_datas = array();
-  $video_datas[] = array(
-    'path' => file_create_url($atom->file_source),
-    'mime_type' => file_get_mimetype($atom->file_source),
-  );
-
-  // Loading alternative video sources:
-  if (isset($atom->data['alternative_video_sources']) && count($atom->data['alternative_video_sources'])) {
-    foreach ($atom->data['alternative_video_sources'] as $key => $video_file) {
-      $video_datas[] = array(
-        'path' => file_create_url($video_file->uri),
-        'mime_type' => $video_file->filemime,
-      );
-    }
-  }
-
   $video_sources = array();
-  foreach ($video_datas as $key => $video) {
+  $field_items = field_get_items('scald_atom', $atom, 'scald_video');
+  foreach ($field_items as $video_file) {
     $video_sources[] = array(
-      'path' => $video['path'],
-      'mime_type' => $video['mime_type'],
+      'path'      => file_create_url($video_file['uri']),
+      'mime_type' => $video_file['filemime'],
     );
   }
 
@@ -173,14 +182,17 @@ function scald_video_form_scald_atom_add_form_options_alter(&$form, &$form_state
   else {
     $atoms = $form_state['scald']['atoms'];
   }
- 
+
   // Set one atom's form options. This can be called multiple times in case
   // a multifile field is used.
   foreach ($atoms as $key => $atom) {
 
     $form["atom$key"]['#tree'] = TRUE;
 
+    // The 'scald_video' file field is not used by other video providers such as
+    // DailyMotion, Vimeo and YouTube. Hide it, and proceed to the next atom.
     if ($atom->provider !== 'scald_video') {
+      $form["atom$key"]['scald_video']['#access'] = FALSE;
       break;
     }
 
@@ -230,27 +242,6 @@ function scald_video_form_scald_atom_add_form_options_alter(&$form, &$form_state
       '#required' => TRUE,
       '#default_value' => $height,
     );
-
-    // Multi sources support: (https://drupal.org/node/2074349):
-    $form["atom$key"]['uploaded_video_sources'] = array('#tree' => TRUE);
-    $uploaded_videos_form = &$form["atom$key"]['uploaded_video_sources'];
-    $uploaded_videos_form['description']['#markup']  = '<label>Alternative video sources</label>';
-    $uploaded_videos_form['description']['#markup'] .= 'Alternative sources will be used as additional source tags within the video.<br/>';
-
-    if (isset($atom->data['alternative_video_sources']) && count($atom->data['alternative_video_sources'])) {
-
-      $uploaded_videos_form['description']['#markup'] .= 'Uncheck to remove additional source file from the atom.';
-
-      foreach ($atom->data['alternative_video_sources'] as $source_key => $video_file) {
-        $uploaded_videos_form[$source_key] = array(
-          '#type' => 'checkbox',
-          '#title' => l($video_file->filename, file_create_url($video_file->uri)),
-          '#default_value' => 1,
-        );
-      }
-    }
-
-    scald_video_get_video_file_form($form["atom$key"]['alternative_video_sources']);
   }
 
   $form['#submit'][] = 'scald_video_form_scald_atom_add_form_options_submit';
@@ -278,35 +269,6 @@ function scald_video_form_scald_atom_add_form_options_submit($form, &$form_state
     $atom->data['video_width'] = $form_state['values']["atom$key"]['width'];
     $atom->data['video_height'] = $form_state['values']["atom$key"]['height'];
 
-    // Updating uploaded alternative sources:
-    if (isset($atom->data['alternative_video_sources']) && count($atom->data['alternative_video_sources'])) {
-      foreach ($atom->data['alternative_video_sources'] as $source_key => $source) {
-        // Removing unchecked sources:
-        if (!$form_state['values']["atom$key"]['uploaded_video_sources'][$source_key]) {
-          unset($atom->data['alternative_video_sources'][$source_key]);
-        }
-      }
-    }
-    if (isset($form["atom$key"]['alternative_video_sources'])) {
-
-      $atom_form = $form["atom$key"]['alternative_video_sources'];
-      $atom_form_state = $form_state['values']["atom$key"]['alternative_video_sources'];
-
-      // Check for new alternative sources from plupload:
-      if (is_array($atom_form_state)) {
-        foreach ($atom_form_state as $source_key => $video_source) {
-          $file = scald_video_get_video_file($atom_form_state[$source_key], $atom_form['#upload_location']);
-          $atom->data['alternative_video_sources'][] = $file;
-        }
-      }
-      else {
-        $file = scald_video_get_video_file($atom_form_state, $atom_form['#upload_location']);
-        if ($file !== FALSE) {
-          $atom->data['alternative_video_sources'][] = $file;
-        }
-      }
-    }
-
     scald_atom_save($atom);
   }
 }
@@ -315,29 +277,44 @@ function scald_video_form_scald_atom_add_form_options_submit($form, &$form_state
  * Returns a video file form element compatible with plupload.
  * This function avoid repetitions over the multiple places
  * a file upload field is needed in scald_video.
- * 
+ *
  * @param $form_element
  *   The form element we want to set to video file field.
  *
  */
 function scald_video_get_video_file_form(&$form_element) {
+  $type = scald_type_load('video');
+
+  $field = field_info_field('scald_video');
+  $instance = field_info_instance('scald_atom', 'scald_video', 'video');
+  $validators = array(
+    'file_validate_extensions' => array(0 => 'webm mp4 ogv'),
+  );
+  $location = 'public://atoms/video/';
+  if ($field && $instance) {
+    $validators = file_field_widget_upload_validators($field, $instance);
+    $directory = file_field_widget_uri($field, $instance);
+    if (file_prepare_directory($directory, FILE_CREATE_DIRECTORY)) {
+      $location = $directory . '/';
+    }
+  }
+
+  $form_element = array(
+    '#title' => check_plain(scald_type_property_translate($type)),
+    '#upload_location' => $location,
+    '#upload_validators' => $validators,
+  );
 
   if (module_exists('plupload')) {
-    $form_element = array(
-      '#type' => 'plupload',
-      '#plupload_settings' => array(
-        'runtimes' => 'html5', 'chunk_size' => '1mb',
-      ),
+    $form_element['#type'] = 'plupload';
+    $form_element['#plupload_settings'] = array(
+      'runtimes' => 'html5', 'chunk_size' => '1mb',
     );
   }
   else {
     $defaults = scald_atom_defaults('video');
     $form_element['#type'] = $defaults->upload_type;
   }
-  $form_element['#upload_validators'] = array('file_validate_extensions' => array('webm mp4 ogv'));
-  $form_element['#upload_location'] = variable_get('scald_video_upload_location', 'public://atoms/video/');
-  ;
-
 }
 
 /**
