@@ -77,7 +77,7 @@ Drupal.dnd = {
     atom_ids = atom_ids.filter(Number);
 
     if (atom_ids.length) {
-      $.getJSON(Drupal.settings.basePath + Drupal.settings.pathPrefix + 'atom/fetch/' + atom_ids.join() + '?context=' + context, function(data) {
+      $.getJSON(Drupal.dnd.prepareUrl('atom/fetch/' + atom_ids.join(), 'context=' + context), function(data) {
         for (var atom_id in data) {
           if (Drupal.dnd.Atoms[atom_id]) {
             // Merge old data into the new return atom.
@@ -183,6 +183,28 @@ Drupal.dnd = {
       Drupal.dnd.insertText(Drupal.dnd.lastFocus, markup);
     }
     return true;
+  },
+
+  /**
+   * Prepare a url as required for ajax calls, taking into account whether clean
+   * urls are enabled or disabled.
+   */
+  prepareUrl: function(path, params) {
+    queryPrefix = '';
+    paramPrefix = '?';
+
+    if (!Drupal.settings.dnd.clean_url) {
+      queryPrefix = '?q=';
+      paramPrefix = '&';
+    }
+
+    var url = Drupal.settings.basePath + queryPrefix + Drupal.settings.pathPrefix + path;
+
+    if (params !== undefined) {
+      url += paramPrefix + params;
+    }
+
+    return url;
   }
 };
 

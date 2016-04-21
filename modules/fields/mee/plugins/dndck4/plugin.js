@@ -156,7 +156,7 @@ CKEDITOR.plugins.add('dndck4', {
     editor.addCommand('atomView', {
       exec: function (editor) {
         var widget = editor.widgets.focused;
-        window.open(Drupal.settings.basePath + Drupal.settings.pathPrefix + 'atom/' + widget.data.sid);
+        window.open(Drupal.dnd.prepareUrl('atom/' + widget.data.sid));
       }
     });
 
@@ -168,7 +168,7 @@ CKEDITOR.plugins.add('dndck4', {
         });
         var $link = $("<a></a>", {
           'target' : '_blank',
-          'href' : Drupal.settings.basePath + Drupal.settings.pathPrefix + 'atom/' + widget.data.sid + '/edit/nojs',
+          'href' : Drupal.dnd.prepareUrl('atom/' + widget.data.sid + '/edit/nojs'),
           'class' : 'ctools-use-modal ctools-modal-custom-style'
         }).appendTo($wrapper);
         Drupal.behaviors.ZZCToolsModal.attach($wrapper);
@@ -657,11 +657,14 @@ Drupal.dndck4 = {
     // framework lets us retrieve out-of-band assets (JS, CSS) and attach
     // behaviors.
     var ajax = new Drupal.ajax('dnd-library', $('#dnd-library'), {
-      url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'atom/ajax-widget-expand/' + data.sid + '?' + $.param({
-        context: data.context,
-        options: encodeURIComponent(data.options),
-        align: data.align
-      }),
+      url: Drupal.dnd.prepareUrl(
+        'atom/ajax-widget-expand/' + data.sid,
+        $.param({
+          context: data.context,
+          options: encodeURIComponent(data.options),
+          align: data.align
+        })
+      ),
       progress: {type: 'none'},
       // The call is triggered programmatically, this event is not used.
       event: 'dndck4_dummy_event',

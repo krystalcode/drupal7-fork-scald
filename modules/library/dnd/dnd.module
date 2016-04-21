@@ -125,6 +125,7 @@ function dnd_library() {
         'data' => array(
           'dnd' => array(
             'url' => url(dnd_get_library()),
+            'clean_url' => variable_get('clean_url'),
             'contexts' => $contexts,
             'contextDefault' => variable_get('dnd_context_default', 'sdl_editor_representation'),
             'usesCaptionDefault' => variable_get('dnd_uses_caption_default', TRUE),
