@@ -30,6 +30,10 @@ function scald_video_scald_atom_providers() {
 function scald_video_scald_add_form(&$form, &$form_state) {
   scald_video_get_video_file_form($form['file']);
   $form['file']['#title'] = 'Video';
+
+  // At least one file is required. We don't set this in the field
+  // configuration since atoms from other providers do not require a file.
+  $form['file']['#required'] = TRUE;
 }
 
 /**
@@ -195,6 +199,11 @@ function scald_video_form_scald_atom_add_form_options_alter(&$form, &$form_state
       $form["atom$key"]['scald_video']['#access'] = FALSE;
       break;
     }
+
+    // At least one file is required. We don't set this in the field
+    // configuration since atoms from other providers do not require a file.
+    $field_language = $form['atom0']['scald_video']['#language'];
+    $form["atom$key"]['scald_video'][$field_language][0]['#required'] = TRUE;
 
     $width = '';
     $height = '';
