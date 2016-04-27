@@ -193,7 +193,7 @@ Drupal.dnd = {
     queryPrefix = '';
     paramPrefix = '?';
 
-    if (!Drupal.settings.dnd.clean_url) {
+    if (Drupal.settings.dnd.clean_url == 0) {
       queryPrefix = '?q=';
       paramPrefix = '&';
     }
