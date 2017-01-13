@@ -1628,15 +1628,15 @@ function scald_scald_prerender($atom, $context, $options, $mode) {
 function scald_scald_render($atom, $context, $options = array()) {
   switch ($context) {
     case 'no-access':
-      $output = theme('scald_render_error', array('context' => $context, 'message' => t('You do not have access to view this Atom.'), 'atom' => $atom));
+      $output = theme('scald_render_error', array('context' => $context, 'message' => t('You do not have access to view this resource.'), 'atom' => $atom));
       break;
 
     case 'invalid-id':
-      $output = theme('scald_render_error', array('context' => $context, 'message' => t('Invalid Scald ID.'), 'atom' => $atom));
+      $output = theme('scald_render_error', array('context' => $context, 'message' => t('Invalid resource ID.'), 'atom' => $atom));
       break;
 
     case 'deleted':
-      $output = theme('scald_render_error', array('context' => $context, 'message' => t('Atom deleted!'), 'atom' => $atom));
+      $output = theme('scald_render_error', array('context' => $context, 'message' => t('This resource has been deleted!'), 'atom' => $atom));
       break;
 
     default:
