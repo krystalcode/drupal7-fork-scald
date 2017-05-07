@@ -1,3 +1,18 @@
+FORK OF THE DRUPAL 7 SCALD MODULE
+---------------------------------
+
+Most notable changes:
+
+- Patched the scald_audio and scald_video modules to use managed fields for
+  storing the audio and video files. This way we can take advantage of all the
+  benefits that come with managed fields, such as storing them in the private
+  filesystem, configure file location per atom type, use the Storage API module
+  to store files in different storage services and more.
+- Refer to Atoms as Resources in user-facing texts and alerts.
+- Fixed a bug with SCALD ajax requests not working when clean urls are not
+  enabled.
+
+
 SCALD: MEDIA MANAGEMENT MADE EASY
 ---------------------------------
 
