@@ -281,6 +281,7 @@ attach: function(context, settings) {
 
 renderLibrary: function(data, editor) {
   var library_wrapper = $(this);
+  var sidebarWidth = $(this).outerWidth();
 
   // Save the current status
   var dndStatus = {
@@ -302,7 +303,7 @@ renderLibrary: function(data, editor) {
   }
   library_wrapper.find('.summary .toggle').click(function() {
     // We toggle class only when animation finishes to avoid flash back.
-    scald_menu.animate({left: scald_menu.hasClass('search-on') ? '-42px' : '-256px'}, function() {
+    scald_menu.animate({left: scald_menu.hasClass('search-on') ? '-42px' : '-'+(sidebarWidth-20)+'px'}, function() {
       $(this).toggleClass('search-on');
     });
     // When display search, we certainly want to display the library, too.
@@ -312,7 +313,7 @@ renderLibrary: function(data, editor) {
   });
   library_wrapper.find('.scald-anchor').click(function() {
     // We toggle class only when animation finishes to avoid flash back.
-    library_wrapper.animate({right: library_wrapper.hasClass('library-on') ? '-276px' : '0'}, function() {
+    library_wrapper.animate({right: library_wrapper.hasClass('library-on') ? '-'+sidebarWidth+'px' : '0'}, function() {
       library_wrapper.toggleClass('library-on');
     });
   });
